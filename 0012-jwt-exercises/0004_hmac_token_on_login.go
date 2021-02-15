@@ -107,7 +107,7 @@ func registerHandler(w http.ResponseWriter, req *http.Request) {
 	database[email] = b
 
 	http.Redirect(w, req, "/", http.StatusSeeOther)
-}
+} 
 
 func loginHandler(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
