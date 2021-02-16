@@ -9,6 +9,8 @@ import (
 	"golang.org/x/oauth2/github"
 )
 
+var STATE = "0000"
+
 var githubOauthConfig = &oauth2.Config{
 	ClientID:     os.Getenv("OAUTH_CLIENT_ID"),
 	ClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
@@ -17,7 +19,8 @@ var githubOauthConfig = &oauth2.Config{
 
 func main() {
 	http.HandleFunc("/", indexHandler)
-	http.HandleFunc("/oauth/github", githubOauthHandler)
+	http.HandleFunc("/oauth/github", startGithubOauthHandler)
+	http.HandleFunc("/oauth2/receive", finishGithubOauthHandler) //define url in github app
 	http.ListenAndServe(":8080", nil)
 }
 
@@ -36,7 +39,28 @@ func indexHandler(w http.ResponseWriter, req *http.Request) {
 	</html>`)
 }
 
-func githubOauthHandler(w http.ResponseWriter, req *http.Request) {
-	redirectURL := githubOauthConfig.AuthCodeURL("0000") //state should be in a database with attempts
+func startGithubOauthHandler(w http.ResponseWriter, req *http.Request) {
+	redirectURL := githubOauthConfig.AuthCodeURL(STATE) //state should be in a database with attempts
 	http.Redirect(w, req, redirectURL, http.StatusSeeOther)
+}
+
+func finishGithubOauthHandler(w http.ResponseWriter, req *http.Request) {
+	code := req.FormValue("code")
+	state := req.FormValue("state")
+
+	ctx := req.Context()
+
+	if state != STATE {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	token, err := githubOauthConfig.Exchange(ctx, code)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
+
+	ts := githubOauthConfig.TokenSource(ctx, token)
+	client := oauth2.NewClient(ctx, ts) //authenticated with github
+
 }
