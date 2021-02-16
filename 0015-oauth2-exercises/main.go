@@ -1,9 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -28,6 +28,12 @@ var oauth = &oauth2.Config{
 	Scopes:       []string{"profile"},
 }
 
+type profileData struct {
+	Email  string `json:"email"`
+	Name   string `json:"name"`
+	UserID string `json:"user_id"`
+}
+
 // key is email, value is user
 var database = map[string]user{}
 
@@ -36,6 +42,9 @@ var sessions = map[string]string{}
 
 // key is uuid from oauth login, value is expiration time
 var oauthExp = map[string]time.Time{}
+
+// key is uid from oauth provider; value is user id, eg, email
+var oauthConnections = map[string]string{}
 
 func main() {
 	http.HandleFunc("/", indexHandler)
@@ -262,11 +271,27 @@ func receiveAmazonOauthHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	bs, err := ioutil.ReadAll(resp.Body)
 	if err != nil && (resp.StatusCode < 200 || resp.StatusCode > 299) {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	io.WriteString(w, string(bs))
+	amzdata := profileData{}
+	err = json.NewDecoder(resp.Body).Decode(&amzdata)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	email, ok := oauthConnections[amzdata.UserID]
+	if !ok {
+		email = amzdata.Email
+	}
+	err = createSession(email, w)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, req, "/dashboard", http.StatusOK)
 }
