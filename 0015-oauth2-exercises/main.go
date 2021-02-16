@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -43,6 +44,7 @@ func main() {
 	http.HandleFunc("/logout", logoutHandler)
 
 	http.HandleFunc("/oauth/amazon/login", startAmazonOauthHandler)
+	http.HandleFunc("/oauth/amazon/receive", receiveAmazonOauthHandler)
 
 	http.ListenAndServe(":8080", nil)
 }
@@ -226,4 +228,45 @@ func startAmazonOauthHandler(w http.ResponseWriter, req *http.Request) {
 
 	// here we redirect to amazon at the AuthURL endpoint
 	http.Redirect(w, req, oauth.AuthCodeURL(id), http.StatusSeeOther)
+}
+
+func receiveAmazonOauthHandler(w http.ResponseWriter, req *http.Request) {
+	state := req.FormValue("state")
+	code := req.FormValue("code")
+	if state == "" || code == "" {
+		http.Error(w, "Failed to authorize at amazon", http.StatusUnauthorized)
+		return
+	}
+
+	expT := oauthExp[state]
+	if time.Now().After(expT) {
+		http.Error(w, "Amazon took too long to authorize", http.StatusRequestTimeout)
+		return
+	}
+
+	ctx := req.Context()
+
+	token, err := oauth.Exchange(ctx, code)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	ts := oauth.TokenSource(ctx, token)
+	c := oauth2.NewClient(ctx, ts)
+
+	resp, err := c.Get("https://api.amazon.com/user/profile")
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	bs, err := ioutil.ReadAll(resp.Body)
+	if err != nil && (resp.StatusCode < 200 || resp.StatusCode > 299) {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	io.WriteString(w, string(bs))
 }
