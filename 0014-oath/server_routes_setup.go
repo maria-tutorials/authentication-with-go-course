@@ -1,9 +1,8 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -18,6 +17,17 @@ var githubOauthConfig = &oauth2.Config{
 	ClientID:     os.Getenv("OAUTH_CLIENT_ID"),
 	ClientSecret: os.Getenv("OAUTH_CLIENT_SECRET"),
 	Endpoint:     github.Endpoint,
+}
+
+//key=githubID; value=user ID
+var githubConnections map[string]string
+
+type githubData struct {
+	Data struct {
+		Viewer struct {
+			ID string `json:"id"`
+		} `json:"viewer"`
+	} `json:"data"`
 }
 
 func main() {
@@ -74,11 +84,19 @@ func finishGithubOauthHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	bs, err := ioutil.ReadAll(resp.Body)
+	gd := githubData{}
+	json.NewDecoder(resp.Body).Decode(&gd)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
+
+	gID := gd.Data.Viewer.ID
+
+	userID, ok := githubConnections[gID]
+	if !ok {
+		// NEED TO CREATE USER ON OUR SYSTEM :D
 		return
 	}
 
-	log.Println(string(bs))
+	// READY TO LOGIN
 }
