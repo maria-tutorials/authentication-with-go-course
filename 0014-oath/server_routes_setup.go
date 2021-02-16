@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
@@ -63,4 +66,19 @@ func finishGithubOauthHandler(w http.ResponseWriter, req *http.Request) {
 	ts := githubOauthConfig.TokenSource(ctx, token)
 	client := oauth2.NewClient(ctx, ts) //authenticated with github
 
+	body := strings.NewReader(`{"query": "query {viewer {id}}"}`)
+	resp, err := client.Post("https://api.github.com/graphql", "application/json", body)
+	if err != nil {
+		http.Error(w, "Failed to get user", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	bs, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	log.Println(string(bs))
 }
