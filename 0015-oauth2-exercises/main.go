@@ -52,6 +52,7 @@ func main() {
 	http.HandleFunc("/login", loginHandler)
 	http.HandleFunc("/logout", logoutHandler)
 
+	http.HandleFunc("/oauth/amazon/register", amazonOauthRegisterHandler)
 	http.HandleFunc("/oauth/amazon/login", startAmazonOauthHandler)
 	http.HandleFunc("/oauth/amazon/receive", receiveAmazonOauthHandler)
 
@@ -134,7 +135,7 @@ func indexHandler(w http.ResponseWriter, req *http.Request) {
 
 func registerHandler(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Redirect(w, req, "/", http.StatusMethodNotAllowed)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed) //METHOD NOT ALLOWED?
 		return
 	}
 
@@ -161,7 +162,7 @@ func registerHandler(w http.ResponseWriter, req *http.Request) {
 
 func loginHandler(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Redirect(w, req, "/", http.StatusMethodNotAllowed)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed) //METHOD NOT ALLOWED?
 		return
 	}
 
@@ -203,7 +204,7 @@ func loginHandler(w http.ResponseWriter, req *http.Request) {
 
 func logoutHandler(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Redirect(w, req, "/", http.StatusMethodNotAllowed)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed) //METHOD NOT ALLOWED?
 		return
 	}
 
@@ -226,9 +227,17 @@ func logoutHandler(w http.ResponseWriter, req *http.Request) {
 	http.Redirect(w, req, "/", http.StatusSeeOther)
 }
 
+func amazonOauthRegisterHandler(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed) //METHOD NOT ALLOWED?
+		return
+	}
+
+}
+
 func startAmazonOauthHandler(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Redirect(w, req, "/", http.StatusMethodNotAllowed) //METHOD NOT ALLOWED?
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed) //METHOD NOT ALLOWED?
 		return
 	}
 
@@ -286,6 +295,16 @@ func receiveAmazonOauthHandler(w http.ResponseWriter, req *http.Request) {
 	email, ok := oauthConnections[amzdata.UserID]
 	if !ok {
 		email = amzdata.Email
+		token, err := createToken(amzdata.UserID)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		c := http.Cookie{
+			Name:  "session",
+			Value: token,
+		}
+		http.SetCookie(w, &c)
 	}
 	err = createSession(email, w)
 	if err != nil {
